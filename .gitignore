@@ -102,3 +102,7 @@ dist
 
 # TernJS port file
 .tern-port
+
+
+### Json Files and other test code
+Test.json/
