@@ -41,6 +41,7 @@ def create():
   }
   '''
   try:
+      #####<-- Add Santization of Inputs -->
       db.collection('Users').add(request.json)
       return jsonify({"success": True}), 200
   except Exception as e:
