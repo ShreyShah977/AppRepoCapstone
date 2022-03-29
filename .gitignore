@@ -107,3 +107,4 @@ dist
 ### Json Files and other test code
 Test.json
 lmao.sh
+__pycache__/*
