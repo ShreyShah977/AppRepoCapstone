@@ -1,11 +1,12 @@
 import os, json
 from dotenv import load_dotenv
 
-
+from flask_cors import CORS
 from flask import Flask, request, jsonify
 from firebase_admin import credentials, firestore, initialize_app
 
 app = Flask(__name__)
+CORS(app)
 load_dotenv()
 ## Init API Keys
 GCP_JSON = os.getenv('PATH_SERVICE_ACC')
@@ -42,6 +43,7 @@ def create():
   '''
   try:
       #####<-- Add Santization of Inputs -->
+      print("FLASK TRY POST")
       db.collection('Users').add(request.json)
       return jsonify({"success": True}), 200
   except Exception as e:
@@ -81,8 +83,8 @@ def update():
         todo_ref.document(id).update(request.json)
         return jsonify({"success": True}), 200
     except Exception as e:
-        return f"An Error Occured: {e}"
-
+        print("An Error Occured: \n {e}")
+        return jsonify({"success": False}), 503
 @app.route('/delete', methods=['GET', 'DELETE'])
 def delete():
     """
