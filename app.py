@@ -141,10 +141,14 @@ def readQR():
         
             if (VaxPass and ValidQRCode):
                 totalValid = "Pass"
-        return jsonify({"validQR": totalValid}), 200
+                QRCodeJSON["totalValid"] = totalValid
+            else:
+                QRCodeJSON["totalValid"] = totalValid
+            qrJSON = json.dumps(QRCodeJSON,indent=2)
+        return qrJSON, 200
     except Exception as e:
-        print("An Error Occured: \n {e}")
-        return jsonify({"validQR": "Fail"}), 200
+        print("An Error Occured: \n ", e)
+        return jsonify({"totalValid": "Fail"}), 200
 #############################################################
 
 
