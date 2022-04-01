@@ -24,9 +24,7 @@ cred = credentials.Certificate(GCP_JSON)
 default_app = initialize_app(cred)
 db = firestore.client()
 todo_ref = db.collection('Users')
-
 fullName = []
-imageQ = 0
 @app.route('/')
 def hello_world():
     return 'Base Level Access'
@@ -118,7 +116,7 @@ def readQR():
         ## Check Valid QR Code Names
         if len(QRCodeJSON) == 4:
             ValidQRCode = True
-            if QRCodeJSON['firstName'] and QRCodeJSON['lastName']:
+            if QRCodeJSON['firstName'] and QRCodeJSON['lastName'] and len(fullName) == 0:
                 fullName.append(QRCodeJSON['firstName'])
                 fullName.append(QRCodeJSON['lastName'])
             ### Check Valid Vax Info
@@ -151,24 +149,30 @@ Get Request for ID Card OCR + Verifiction
 
 @app.route('/getID', methods=['GET'])
 def readID():
+    ocrValid = "Fail"
     try:
+        
         ####
         '''
         Enter in Code to Grab ID via OCR from Camera, Parse, and Check name match.
         Global variable to Check and place name.
         '''
         ####
-        nameMatch = True
-        ValidID = True
+        count = 0
+        ocrData = getOCR()
+        for word in fullName:
+            a = word
+            a = a.lower()
+            if a in ocrData:
+                print("Name found")
+                count += 1
+        if count == 2:
+            ocrValid = "Pass"
 
-        totalValid = "Fail"
-        if (nameMatch and ValidID):
-            totalValid = "Pass"
-
-        return jsonify({"validID": totalValid}), 200
+        return jsonify({"validID": ocrValid}), 200
     except Exception as e:
         print("An Error Occured: \n {e}")
-        return jsonify({"success": False}), 503
+        return jsonify({"validID": ocrValid}), 200
 
 
 
@@ -228,3 +232,28 @@ def QRCodeCheck():
     payload["firstVax"] = cData[2][-1]
     payload["secondVax"] = cData[3][-1]
     return payload
+
+
+
+############
+#  Internal Functions for Sensors
+#
+############
+def getOCR():
+    camera = PiCamera()
+    camera.start_preview()
+    # Camera warm-up time
+    sleep(5)
+    camera.capture('./Shrey_DL.png')
+
+    camera.stop_preview()
+
+    camera.close()
+    img = cv2.imread('./Shrey_DL.png')
+
+    # Adding custom options
+    custom_config = r'--oem 3 --psm 6'
+    resultData = pytesseract.image_to_string(img)
+    resultData = resultData.lower()
+    return resultData
+    
