@@ -1,11 +1,18 @@
 import os
 import json
+import datetime
 from dotenv import load_dotenv
 
 from flask_cors import CORS
 from flask import Flask, request, jsonify
 from firebase_admin import credentials, firestore, initialize_app
 
+from time import sleep
+from picamera import PiCamera
+import qrcode
+import cv2
+import pytesseract
+queue = 0;
 app = Flask(__name__)
 CORS(app)
 load_dotenv()
@@ -18,7 +25,8 @@ default_app = initialize_app(cred)
 db = firestore.client()
 todo_ref = db.collection('Users')
 
-
+fullName = []
+imageQ = 0
 @app.route('/')
 def hello_world():
     return 'Base Level Access'
@@ -51,45 +59,6 @@ def create():
         return f"An Error Occured: {e}"
 
 
-'''
-
-#################################################
-@app.route('/list', methods=['GET'])
-def read():
-    """
-        read() : Fetches documents from Firestore collection as JSON.
-        todo : Return document that matches query ID.
-        all_todos : Return all documents.
-    """
-    try:
-        # Check if ID was passed to URL query
-        todo_id = request.args.get('id')
-        if todo_id:
-            todo = todo_ref.document(todo_id).get()
-            return jsonify(todo.to_dict()), 200
-        else:
-            all_todos = [doc.to_dict() for doc in todo_ref.stream()]
-            return jsonify(all_todos), 200
-    except Exception as e:
-        return f"An Error Occured: {e}"
-
-
-############################################################
-@app.route('/update', methods=['POST', 'PUT'])
-def update():
-    """
-        update() : Update document in Firestore collection with request body.
-        Ensure you pass a custom ID as part of json body in post request,
-        e.g. json={'id': '1', 'title': 'Write a blog post today'}
-    """
-    try:
-        id = request.json['id']
-        todo_ref.document(id).update(request.json)
-        return jsonify({"success": True}), 200
-    except Exception as e:
-        print("An Error Occured: \n {e}")
-        return jsonify({"success": False}), 503
-'''
 #############################################################
 
 '''
@@ -135,22 +104,42 @@ Get Request for QR Code + Verifiction
 @app.route('/getQR', methods=['GET'])
 def readQR():
     try:
+        
         ####
         '''
         Enter in Code to Grab QR Code from Camera, Parse, and Check for double vax.
         '''
         ####
-        doubleVax = True
-        ValidQRCode = True
-
+        VaxPass = False
+        ValidQRCode = False
+        QRCodeJSON = QRCodeCheck()
         totalValid = "Fail"
-        if (doubleVax and ValidQRCode):
-            totalValid = "Pass"
 
+        ## Check Valid QR Code Names
+        if len(QRCodeJSON) == 4:
+            ValidQRCode = True
+            if QRCodeJSON['firstName'] and QRCodeJSON['lastName']:
+                fullName.append(QRCodeJSON['firstName'])
+                fullName.append(QRCodeJSON['lastName'])
+            ### Check Valid Vax Info
+            if QRCodeJSON['firstVax'] and QRCodeJSON['secondVax']:
+                ## Collect second Vax
+                sv = QRCodeJSON["secondVax"].split('/')
+                today = datetime.date.today()
+                lastVax = datetime.date(int('20'+sv[2]),int(sv[0]),int(sv[1]))
+                ## Add two weeks
+                d = datetime.timedelta(days=14)
+                t = d + lastVax;
+                ## Check the second Vax is more than 2 weeks away
+                if t != today:
+                    VaxPass = True
+        
+            if (VaxPass and ValidQRCode):
+                totalValid = "Pass"
         return jsonify({"validQR": totalValid}), 200
     except Exception as e:
         print("An Error Occured: \n {e}")
-        return jsonify({"success": False}), 503
+        return jsonify({"validQR": "Fail"}), 200
 #############################################################
 
 
@@ -180,3 +169,62 @@ def readID():
     except Exception as e:
         print("An Error Occured: \n {e}")
         return jsonify({"success": False}), 503
+
+
+
+############
+#  Internal Functions for Sensors
+#
+############
+def QRCodeCheck():
+    camera = PiCamera()
+    
+    camera.start_preview()
+    # Camera warm-up time
+    sleep(5)
+    ##camera.capture('Shrey_DL.png')
+
+    camera.stop_preview()
+    camera.capture('./QRCode.png')
+    camera.close()
+    ## Import File 
+    filename = "QRCode.png"
+    image = cv2.imread(filename)
+    detector = cv2.QRCodeDetector()
+    data, vertices_array, binary_qrcode = detector.detectAndDecode(image)
+
+    # Data which for you want to make QR code
+    # Here we are using URL of MakeUseOf website
+    key = 'VW5pdmVyc2l0eSBvZiBSZWdpbmEK'
+    
+    # if vertices_array is not None:
+    #     print("QRCode encrypted data:")
+    #     print(data)
+
+    de_data = ""
+    for element in range(0, len(data)):
+        i = 0
+        list1 = list(data)
+        num_msg = ord(data[element])
+        while (i < len(key)):
+            i = i + 1
+            if i == len(key):
+                i = 0
+            num_key = ord(key[i])
+            break
+        res = num_msg - num_key
+        list1[element] = chr(res)
+        data = ''.join(list1)
+    qrCodeData = data.replace('\n','$');
+    dataList = qrCodeData.split('$');
+    cData = []
+    for i in dataList:
+        cData.append(i.split(' '));
+
+
+    payload = {}
+    payload['firstName'] = cData[0][1]
+    payload["lastName"] = cData[0][2]
+    payload["firstVax"] = cData[2][-1]
+    payload["secondVax"] = cData[3][-1]
+    return payload
